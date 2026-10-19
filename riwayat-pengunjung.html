@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Riwayat Pengunjung — Siklus Air 3D</title>
+<style>
+:root{--bg:#04101c;--panel:#0b2545;--blue:#3e92cc;--mint:#a8dadc;--gold:#f4d35e;--white:#f8fdff}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:Segoe UI,system-ui,Arial,sans-serif;color:var(--white);background:radial-gradient(100% 70% at 10% 0%,#1d4e89 0%,#0b2545 45%,var(--bg) 100%);padding:24px}
+main{max-width:900px;margin:0 auto;padding:clamp(18px,4vw,36px);border:1px solid #a8dadc44;border-radius:24px;background:#081c30dd;box-shadow:0 20px 60px #0006}
+header{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:24px}
+h1{font-size:clamp(25px,5vw,38px);margin:0 0 8px}p{line-height:1.65;color:#d8e8ef}
+.sub{margin:0;color:var(--mint);font-size:14px}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+button,.back{display:inline-flex;align-items:center;justify-content:center;padding:11px 15px;border:1px solid #a8dadc66;border-radius:12px;background:#3e92cc33;color:white;text-decoration:none;font-weight:700;cursor:pointer}
+button.danger{background:#ee6c4d22;border-color:#ee6c4d88}
+.profile{display:flex;gap:12px;align-items:center;padding:16px;border-radius:15px;background:#a8dadc12;border:1px solid #a8dadc33;margin-bottom:20px}
+.avatar{font-size:28px}.muted{color:#a8dadc;font-size:13px}
+#list{display:grid;gap:10px}
+.item{display:flex;gap:12px;align-items:flex-start;padding:15px;border:1px solid #a8dadc2c;border-radius:14px;background:#ffffff08}
+.icon{width:38px;height:38px;display:grid;place-items:center;flex:none;border-radius:12px;background:#3e92cc33;font-size:20px}
+.item-title{font-weight:700;line-height:1.5}.time{font-size:12px;color:#a8dadc;margin-top:5px}
+.empty{padding:24px;text-align:center;border:1px dashed #a8dadc55;border-radius:14px;color:#d8e8ef}
+.notice{padding:13px 15px;border-left:3px solid var(--gold);background:#f4d35e12;border-radius:8px;font-size:13px}
+footer{margin-top:24px;text-align:center;font-size:12px;color:#a8dadc99}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div><h1>📚 Riwayat Pengunjung</h1><p class="sub">Riwayat aktivitas dari media pembelajaran Siklus Air 3D</p></div>
+  <div class="actions"><a class="back" href="index.html">← Kembali ke Media</a></div>
+</header>
+<div class="profile">
+  <div class="avatar">👤</div>
+  <div><strong id="userName">Memuat identitas...</strong><div class="muted" id="userSchool"></div></div>
+</div>
+<div class="actions" style="justify-content:space-between;margin-bottom:14px">
+  <p style="margin:0">Aktivitas terbaru ditampilkan terlebih dahulu.</p>
+  <button class="danger" id="clearBtn">Hapus Riwayat Saya</button>
+</div>
+<div id="list"><div class="empty">Memuat riwayat aktivitas...</div></div>
+<p class="notice" id="notice" style="display:none"></p>
+<footer>Data disimpan secara lokal pada browser/perangkat ini. Halaman ini menggunakan penyimpanan yang sama dengan index.html.</footer>
+</main>
+<script>
+const IDENT_KEY='sa_identity_v2';
+const $=s=>document.querySelector(s);
+const user=(()=>{try{return JSON.parse(localStorage.getItem(IDENT_KEY)||'null')}catch(e){return null}})();
+const userKeyOf=id=>(id.name+'|'+id.school).toLowerCase().trim();
+let db=null;
+function showNotice(message){const el=$('#notice');el.textContent=message;el.style.display='block'}
+function openDB(){return new Promise((resolve,reject)=>{
+  if(!('indexedDB' in window)){reject(new Error('Browser tidak mendukung IndexedDB'));return}
+  const req=indexedDB.open('sa_db_v2',1);
+  req.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('hist')){const st=d.createObjectStore('hist',{keyPath:'id',autoIncrement:true});st.createIndex('userKey','userKey',{unique:false})}};
+  req.onsuccess=e=>{db=e.target.result;resolve(db)};
+  req.onerror=()=>reject(req.error||new Error('Database tidak dapat dibuka'));
+})}
+function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function iconFor(icon){if(['i-edit','📝'].includes(icon))return '📝';if(['i-compass','🧭'].includes(icon))return '🧭';if(['i-droplet','💧'].includes(icon))return '💧';if(['i-target','🎯'].includes(icon))return '🎯';if(['i-check','✓','✔'].includes(icon))return '✅';return '📘'}
+async function renderHistory(){
+  if(!user||!user.name||!user.school){
+    $('#userName').textContent='Identitas belum ditemukan';
+    $('#userSchool').textContent='';
+    $('#list').innerHTML='<div class="empty">Silakan buka index.html dan masuk menggunakan nama serta sekolah/instansi terlebih dahulu. Setelah itu buka kembali halaman ini.</div>';
+    $('#clearBtn').disabled=true;return;
+  }
+  $('#userName').textContent=user.name;$('#userSchool').textContent=user.school;
+  try{
+    const d=await openDB();
+    const rows=await new Promise((resolve,reject)=>{const req=d.transaction('hist','readonly').objectStore('hist').getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error)});
+    const entries=rows.filter(x=>x.userKey===userKeyOf(user)).sort((a,b)=>(b.time||0)-(a.time||0)).slice(0,100);
+    if(!entries.length){$('#list').innerHTML='<div class="empty">Belum ada riwayat aktivitas untuk pengguna ini. Mulai belajar atau gunakan simulasi 3D dari halaman utama untuk membuat riwayat.</div>';return}
+    $('#list').innerHTML=entries.map(it=>{
+      const date=new Date(it.time||Date.now());
+      const stamp=Number.isNaN(date.getTime())?'Waktu tidak diketahui':date.toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'})+' · '+date.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+      return '<article class="item"><div class="icon">'+iconFor(it.icon)+'</div><div><div class="item-title">'+escapeHTML(it.text||'Aktivitas belajar')+'</div><div class="time">'+escapeHTML(stamp)+'</div></div></article>';
+    }).join('');
+  }catch(err){
+    $('#list').innerHTML='<div class="empty">Riwayat belum dapat dibaca. Pastikan index.html dan riwayat-pengunjung.html dibuka dari alamat/hosting yang sama, bukan dari lokasi berbeda.</div>';
+    showNotice('Penyimpanan browser tidak dapat diakses. Jika membuka file langsung (file://), coba jalankan keduanya melalui Live Server atau hosting yang sama.');
+  }
+}
+$('#clearBtn').addEventListener('click',async()=>{
+  if(!user||!confirm('Hapus semua riwayat aktivitas milik '+user.name+'?'))return;
+  try{
+    const d=db||await openDB();
+    await new Promise((resolve,reject)=>{
+      const tx=d.transaction('hist','readwrite');const store=tx.objectStore('hist');const req=store.getAll();
+      req.onsuccess=()=>{(req.result||[]).filter(x=>x.userKey===userKeyOf(user)).forEach(x=>store.delete(x.id))};
+      req.onerror=()=>reject(req.error);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+    });
+    await renderHistory();showNotice('Riwayat pengguna berhasil dihapus.');
+  }catch(e){showNotice('Riwayat tidak dapat dihapus karena penyimpanan browser tidak tersedia.')}
+});
+renderHistory();
+</script>
+</body>
+</html>
